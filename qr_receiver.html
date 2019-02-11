@@ -1,0 +1,179 @@
+<html>
+    <body>
+        <h3 id="progress">0%</h3>
+        <canvas id="canvas"></canvas>
+
+        <script src="jsQR.js"></script>
+    
+        <script>
+            function xor_shift(rng_state) {
+                let x = rng_state.state;
+                x ^= (x << 13) >>> 0;
+                x ^= (x >>> 17) >>> 0;
+                x ^= (x << 5) >>> 0;
+
+                rng_state.state = x;
+                return x;
+            }
+
+            //Set up video elements
+            var video = document.createElement("video");
+            var canvasElement = document.getElementById("canvas");
+            var progressElement = document.getElementById("progress");
+            var canvas = canvasElement.getContext("2d");
+
+            function drawLine(begin, end, color) {
+                canvas.beginPath();
+                canvas.moveTo(begin.x, begin.y);
+                canvas.lineTo(end.x, end.y);
+                canvas.lineWidth = 4;
+                canvas.strokeStyle = color;
+                canvas.stroke();
+            }
+
+            // Use facingMode: environment to attemt to get the front camera on phones
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
+                video.srcObject = stream;
+                video.setAttribute("playsinline", true); // required to tell iOS safari we don't want fullscreen
+                video.play();
+                requestAnimationFrame(tick);
+            });
+
+            var data = new Uint8Array();
+            var pending_blocks = [];
+            var decoded_blocks = new Set();
+            
+
+            function tick() {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvasElement.hidden = false;
+
+                    canvasElement.height = video.videoHeight;
+                    canvasElement.width = video.videoWidth;
+                    canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+                    var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                    var code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert",
+                    });
+                    if (code) {
+                        drawLine(code.location.topLeftCorner, code.location.topRightCorner, "#FF3B58");
+                        drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "#FF3B58");
+                        drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "#FF3B58");
+                        drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
+
+                        //Code has been detected
+                        console.log(code)
+                        if (code.binaryData.length == 17) {
+                            //Start decoding LT Code
+
+                            //Decode total size
+                            var total_size = 0;
+                            total_size += (code.binaryData[0] << 24) >>> 0;
+                            total_size += (code.binaryData[1] << 16) >>> 0;
+                            total_size += (code.binaryData[2] << 8) >>> 0;
+                            total_size += (code.binaryData[3]) >>> 0;
+
+                            //Decode degree
+                            var degree = 0;
+                            degree |= (code.binaryData[4] << 24) >>> 0;
+                            degree |= (code.binaryData[5] << 16) >>> 0;
+                            degree |= (code.binaryData[6] << 8) >>> 0;
+                            degree |= (code.binaryData[7])  >>> 0;
+
+                            //Decode degree
+                            var rng_state = {state: 0};
+                            rng_state.state |= (code.binaryData[8] << 24) >>> 0;
+                            rng_state.state |= (code.binaryData[9] << 16) >>> 0;
+                            rng_state.state |= (code.binaryData[10] << 8) >>> 0;
+                            rng_state.state |= (code.binaryData[11]) >>> 0;
+
+                            //Decode xored block indices
+                            var xor_block_indices = 0;
+                            xor_block_indices |= (code.binaryData[12] << 24) >>> 0;
+                            xor_block_indices |= (code.binaryData[13] << 16) >>> 0;
+                            xor_block_indices |= (code.binaryData[14] << 8) >>> 0;
+                            xor_block_indices |= (code.binaryData[15]) >>> 0;
+
+                            //Decode xored block content
+                            var xor_block_content = code.binaryData[16];
+
+                            if (data.length == 0) {
+                                //Initiate Empty array
+                                console.log("Intitated Data!")
+                                data = new Uint8Array(total_size);
+                            }
+
+                            var contained_indices = [];
+                            for(var i = 0; i < degree; i++) {
+                                var idx = (xor_shift(rng_state) >>> 0) % total_size;
+                                //Partially decode the block if we have seen an index before
+                                if (decoded_blocks.has(idx)) {
+                                    xor_block_indices ^= idx;
+                                    xor_block_content ^= data[idx];
+                                } else {
+                                    contained_indices.push(idx)
+                                }
+                            }
+
+                            //We effectively have a degree of 1 ... already decoded block
+                            if (contained_indices.length == 1) {
+                                decoded_blocks.add(xor_block_indices);
+                                data[xor_block_indices] = xor_block_content;
+                            } else {
+                                pending_blocks.push({
+                                    idx: contained_indices,
+                                    xor_idx: xor_block_indices,
+                                    xor_content: xor_block_content
+                                });
+                            }
+
+                            //Partially decode pending blocks with known blocks
+                            var updated_pending_blocks = [];
+                            pending_blocks.forEach(block => {
+                                var updated_idx = [];
+                                var updated_xor_idx = block.xor_idx;
+                                var updated_xor_content = block.xor_content;
+
+                                block.idx.forEach(idx => {
+                                    if (decoded_blocks.has(idx)) {
+                                        updated_xor_idx ^= idx;
+                                        updated_xor_content ^= data[idx]
+                                    } else {
+                                        updated_idx.push(idx)
+                                    }
+                                });
+
+                                if (updated_idx.length == 0) {
+                                    //Do Nothing as no new information gained
+                                } else if (updated_idx.length == 1) {
+                                    //After partial decoding, there is now a block of degree 1
+                                    decoded_blocks.add(updated_xor_idx);
+                                    data[updated_xor_idx] = updated_xor_content;
+                                } else {
+                                    updated_pending_blocks.push({
+                                        idx: updated_idx,
+                                        xor_idx: updated_xor_idx,
+                                        xor_content: updated_xor_content
+                                    });
+                                }
+
+                            });
+                            pending_blocks = updated_pending_blocks;
+
+                            progressElement.innerHTML = (decoded_blocks.size * 100.0 / total_size).toFixed(2) + "%";
+
+                            if (decoded_blocks.size == total_size) {
+                                console.log(data);
+                                alert("Finished Decoding!");
+                                alert(String.fromCharCode.apply(String, data))
+                            }
+
+                        }
+                    }
+                }
+                requestAnimationFrame(tick);
+            }
+        
+        </script>
+    </body>
+</html>
