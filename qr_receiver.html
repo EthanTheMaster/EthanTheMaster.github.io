@@ -62,22 +62,22 @@
                         drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
 
                         //Code has been detected
-                        console.log(code)
-                        if (code.binaryData.length % 17 == 0) {
+                        // console.log(code)
+                        if (code.binaryData.length % 20 == 0) {
                             var data_copy = code.binaryData;
 
                             while (data_copy.length != 0) {
-                                //Extract Packet Out by grabbing first 17 bytes
-                                var packet = data_copy.splice(0, 17);
+                                //Extract Packet Out by grabbing first 20 bytes
+                                var packet = data_copy.splice(0, 20);
 
                                 //Start decoding LT Code
 
                                 //Decode total size
                                 var total_size = 0;
-                                total_size += (packet[0] << 24) >>> 0;
-                                total_size += (packet[1] << 16) >>> 0;
-                                total_size += (packet[2] << 8) >>> 0;
-                                total_size += (packet[3]) >>> 0;
+                                total_size |= (packet[0] << 24) >>> 0;
+                                total_size |= (packet[1] << 16) >>> 0;
+                                total_size |= (packet[2] << 8) >>> 0;
+                                total_size |= (packet[3]) >>> 0;
 
                                 //Decode degree
                                 var degree = 0;
@@ -102,6 +102,30 @@
 
                                 //Decode xored block content
                                 var xor_block_content = packet[16];
+
+                                //Decode parity bytes
+                                var parity_bytes = 0;
+                                parity_bytes |= (packet[17] << 16) >>> 0;
+                                parity_bytes |= (packet[18] << 8) >>> 0;
+                                parity_bytes |= (packet[19]) >>> 0;
+
+                                //Verify transmission was correct by generating parity
+                                var parity_rng = {state: rng_state.state}
+                                var parity_gen = xor_shift(parity_rng) >>> 0;
+                                parity_rng = {state: (parity_gen ^ total_size)};
+                                parity_gen = xor_shift(parity_rng) >>> 0;
+                                parity_rng = {state: (parity_gen ^ degree)};
+                                parity_gen = xor_shift(parity_rng) >>> 0;
+                                parity_rng = {state: (parity_gen ^ xor_block_indices)};
+                                parity_gen = xor_shift(parity_rng) >>> 0;
+                                parity_rng = {state: (parity_gen ^ xor_block_content)};
+                                parity_gen = xor_shift(parity_rng) >>> 0;
+
+                                if ((parity_gen & 0xFFFFFF) >>> 0 != parity_bytes) {
+                                    console.log("Parity Failed!");
+                                    continue;
+                                }                            
+                                
 
                                 if (data.length == 0) {
                                     //Initiate Empty array
@@ -168,7 +192,7 @@
 
                                 progressElement.innerHTML = (decoded_blocks.size * 100.0 / total_size).toFixed(2) + "%";
 
-                                if (decoded_blocks.size == total_size) {
+                                if (decoded_blocks.size >= total_size) {
                                     console.log(data);
                                     alert("Finished Decoding!");
                                     alert(String.fromCharCode.apply(String, data))
