@@ -63,111 +63,119 @@
 
                         //Code has been detected
                         console.log(code)
-                        if (code.binaryData.length == 17) {
-                            //Start decoding LT Code
+                        if (code.binaryData.length % 17 == 0) {
+                            var data_copy = code.binaryData;
 
-                            //Decode total size
-                            var total_size = 0;
-                            total_size += (code.binaryData[0] << 24) >>> 0;
-                            total_size += (code.binaryData[1] << 16) >>> 0;
-                            total_size += (code.binaryData[2] << 8) >>> 0;
-                            total_size += (code.binaryData[3]) >>> 0;
+                            while (data_copy.length != 0) {
+                                //Extract Packet Out by grabbing first 17 bytes
+                                var packet = data_copy.splice(0, 17);
 
-                            //Decode degree
-                            var degree = 0;
-                            degree |= (code.binaryData[4] << 24) >>> 0;
-                            degree |= (code.binaryData[5] << 16) >>> 0;
-                            degree |= (code.binaryData[6] << 8) >>> 0;
-                            degree |= (code.binaryData[7])  >>> 0;
+                                //Start decoding LT Code
 
-                            //Decode degree
-                            var rng_state = {state: 0};
-                            rng_state.state |= (code.binaryData[8] << 24) >>> 0;
-                            rng_state.state |= (code.binaryData[9] << 16) >>> 0;
-                            rng_state.state |= (code.binaryData[10] << 8) >>> 0;
-                            rng_state.state |= (code.binaryData[11]) >>> 0;
+                                //Decode total size
+                                var total_size = 0;
+                                total_size += (packet[0] << 24) >>> 0;
+                                total_size += (packet[1] << 16) >>> 0;
+                                total_size += (packet[2] << 8) >>> 0;
+                                total_size += (packet[3]) >>> 0;
 
-                            //Decode xored block indices
-                            var xor_block_indices = 0;
-                            xor_block_indices |= (code.binaryData[12] << 24) >>> 0;
-                            xor_block_indices |= (code.binaryData[13] << 16) >>> 0;
-                            xor_block_indices |= (code.binaryData[14] << 8) >>> 0;
-                            xor_block_indices |= (code.binaryData[15]) >>> 0;
+                                //Decode degree
+                                var degree = 0;
+                                degree |= (packet[4] << 24) >>> 0;
+                                degree |= (packet[5] << 16) >>> 0;
+                                degree |= (packet[6] << 8) >>> 0;
+                                degree |= (packet[7])  >>> 0;
 
-                            //Decode xored block content
-                            var xor_block_content = code.binaryData[16];
+                                //Decode degree
+                                var rng_state = {state: 0};
+                                rng_state.state |= (packet[8] << 24) >>> 0;
+                                rng_state.state |= (packet[9] << 16) >>> 0;
+                                rng_state.state |= (packet[10] << 8) >>> 0;
+                                rng_state.state |= (packet[11]) >>> 0;
 
-                            if (data.length == 0) {
-                                //Initiate Empty array
-                                console.log("Intitated Data!")
-                                data = new Uint8Array(total_size);
-                            }
+                                //Decode xored block indices
+                                var xor_block_indices = 0;
+                                xor_block_indices |= (packet[12] << 24) >>> 0;
+                                xor_block_indices |= (packet[13] << 16) >>> 0;
+                                xor_block_indices |= (packet[14] << 8) >>> 0;
+                                xor_block_indices |= (packet[15]) >>> 0;
 
-                            var contained_indices = [];
-                            for(var i = 0; i < degree; i++) {
-                                var idx = (xor_shift(rng_state) >>> 0) % total_size;
-                                //Partially decode the block if we have seen an index before
-                                if (decoded_blocks.has(idx)) {
-                                    xor_block_indices ^= idx;
-                                    xor_block_content ^= data[idx];
-                                } else {
-                                    contained_indices.push(idx)
+                                //Decode xored block content
+                                var xor_block_content = packet[16];
+
+                                if (data.length == 0) {
+                                    //Initiate Empty array
+                                    console.log("Intitated Data!")
+                                    data = new Uint8Array(total_size);
                                 }
-                            }
 
-                            //We effectively have a degree of 1 ... already decoded block
-                            if (contained_indices.length == 1) {
-                                decoded_blocks.add(xor_block_indices);
-                                data[xor_block_indices] = xor_block_content;
-                            } else {
-                                pending_blocks.push({
-                                    idx: contained_indices,
-                                    xor_idx: xor_block_indices,
-                                    xor_content: xor_block_content
-                                });
-                            }
-
-                            //Partially decode pending blocks with known blocks
-                            var updated_pending_blocks = [];
-                            pending_blocks.forEach(block => {
-                                var updated_idx = [];
-                                var updated_xor_idx = block.xor_idx;
-                                var updated_xor_content = block.xor_content;
-
-                                block.idx.forEach(idx => {
+                                var contained_indices = [];
+                                for(var i = 0; i < degree; i++) {
+                                    var idx = (xor_shift(rng_state) >>> 0) % total_size;
+                                    //Partially decode the block if we have seen an index before
                                     if (decoded_blocks.has(idx)) {
-                                        updated_xor_idx ^= idx;
-                                        updated_xor_content ^= data[idx]
+                                        xor_block_indices ^= idx;
+                                        xor_block_content ^= data[idx];
                                     } else {
-                                        updated_idx.push(idx)
+                                        contained_indices.push(idx)
                                     }
-                                });
+                                }
 
-                                if (updated_idx.length == 0) {
-                                    //Do Nothing as no new information gained
-                                } else if (updated_idx.length == 1) {
-                                    //After partial decoding, there is now a block of degree 1
-                                    decoded_blocks.add(updated_xor_idx);
-                                    data[updated_xor_idx] = updated_xor_content;
+                                //We effectively have a degree of 1 ... already decoded block
+                                if (contained_indices.length == 1) {
+                                    decoded_blocks.add(xor_block_indices);
+                                    data[xor_block_indices] = xor_block_content;
                                 } else {
-                                    updated_pending_blocks.push({
-                                        idx: updated_idx,
-                                        xor_idx: updated_xor_idx,
-                                        xor_content: updated_xor_content
+                                    pending_blocks.push({
+                                        idx: contained_indices,
+                                        xor_idx: xor_block_indices,
+                                        xor_content: xor_block_content
                                     });
                                 }
 
-                            });
-                            pending_blocks = updated_pending_blocks;
+                                //Partially decode pending blocks with known blocks
+                                var updated_pending_blocks = [];
+                                pending_blocks.forEach(block => {
+                                    var updated_idx = [];
+                                    var updated_xor_idx = block.xor_idx;
+                                    var updated_xor_content = block.xor_content;
 
-                            progressElement.innerHTML = (decoded_blocks.size * 100.0 / total_size).toFixed(2) + "%";
+                                    block.idx.forEach(idx => {
+                                        if (decoded_blocks.has(idx)) {
+                                            updated_xor_idx ^= idx;
+                                            updated_xor_content ^= data[idx]
+                                        } else {
+                                            updated_idx.push(idx)
+                                        }
+                                    });
 
-                            if (decoded_blocks.size == total_size) {
-                                console.log(data);
-                                alert("Finished Decoding!");
-                                alert(String.fromCharCode.apply(String, data))
+                                    if (updated_idx.length == 0) {
+                                        //Do Nothing as no new information gained
+                                    } else if (updated_idx.length == 1) {
+                                        //After partial decoding, there is now a block of degree 1
+                                        decoded_blocks.add(updated_xor_idx);
+                                        data[updated_xor_idx] = updated_xor_content;
+                                    } else {
+                                        updated_pending_blocks.push({
+                                            idx: updated_idx,
+                                            xor_idx: updated_xor_idx,
+                                            xor_content: updated_xor_content
+                                        });
+                                    }
+
+                                });
+                                pending_blocks = updated_pending_blocks;
+
+                                progressElement.innerHTML = (decoded_blocks.size * 100.0 / total_size).toFixed(2) + "%";
+
+                                if (decoded_blocks.size == total_size) {
+                                    console.log(data);
+                                    alert("Finished Decoding!");
+                                    alert(String.fromCharCode.apply(String, data))
+                                }
+
                             }
-
+                            
                         }
                     }
                 }
