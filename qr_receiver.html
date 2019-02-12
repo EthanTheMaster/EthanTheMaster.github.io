@@ -142,18 +142,18 @@
                                     data[xor_block_indices >>> 0] = xor_block_content >>> 0;
                                 } else {
                                     //Attempt to partially decode the block
-                                    indices = [];
+                                    unsolved_idx = [];
                                     for (var i = 0; i < degree; i++) {
-                                        var idx = xor_shift(rng_state) >>> 0;
+                                        var idx = (xor_shift(rng_state) >>> 0) % data.length;
                                         if (decoded_blocks.has(idx)) {
                                             xor_block_indices = (xor_block_indices >>> 0) ^ idx;
                                             xor_block_content = (xor_block_content >>> 0) ^ data[idx];
                                         } else {
-                                            indices.push(idx);
+                                            unsolved_idx.push(idx);
                                         }
                                     }
                                     pending_blocks.push({
-                                        indices: indices,
+                                        indices: unsolved_idx,
                                         xor_indices: xor_block_indices,
                                         xor_content: xor_block_content,
                                     });
