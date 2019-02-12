@@ -189,6 +189,14 @@
                                     console.log(data);
                                     alert("Finished Decoding!");
                                     alert(String.fromCharCode.apply(String, data))
+
+                                    var blob = new Blob([data]);
+                                    var link = document.createElement('a');
+                                    link.href = window.URL.createObjectURL(blob);
+                                    link.download = "blob";
+                                    link.innerText = "Download Link"
+                                    
+                                    document.body.appendChild(link);
                                 }
                             }
                             
