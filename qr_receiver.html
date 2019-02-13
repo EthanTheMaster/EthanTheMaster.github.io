@@ -199,6 +199,7 @@
                                     alert(String.fromCharCode.apply(String, data))
 
                                     finished_download = true;
+                                    blob = new Blob([data]);
                                     link.href = window.URL.createObjectURL(blob);
                                     link.download = "blob";
                                     link.innerText = "Download Link"
