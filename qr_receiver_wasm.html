@@ -17,13 +17,13 @@
             delete WebAssembly.instantiateStreaming;
         </script>
 
-        <script src='./wasm_qr_receiver.js'></script>
+        <script src='wasm_qr_receiver.js'></script>
         <script src="jsQR.js"></script>
     
         <script>
             var wasm_loaded = false;
             var receiver = null;
-            wasm_bindgen("./wasm_qr_receiver_bg.wasm").then(() => {
+            wasm_bindgen("wasm_qr_receiver_bg.wasm").then(() => {
                 wasm_loaded = true;
                 receiver = wasm_bindgen.QrReceiver.new()
             });
