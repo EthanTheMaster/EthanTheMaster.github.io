@@ -1,0 +1,174 @@
+<html>
+    <head>
+        <title>Postfix Visualization</title>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+        <style>
+            .flex-box {
+                width: 100%;
+                display: flex;
+                flex-direction: row;
+            }
+
+            .col-flex-box {
+                width: 100%;
+                display: flex;
+                overflow: auto;
+                flex-direction: column;
+            }
+
+            #formula {
+                margin: 30px 0px 30px 0px;
+            }
+
+            .token {
+                font-size: 20px;
+                border-style: solid;
+                border-color: black;
+                text-align: center;
+            }
+
+            .selected {
+                background-color: red;
+            }
+
+            #current_expr div {
+                min-width: 50px;
+                height: 50px;
+                border-style: solid;
+                border-color: black;
+                font-size: 20px;
+                text-align: center; 
+            }
+
+            #stack {
+                margin: 70px 0px 70px 0;
+                height: 500px;
+                width: 50%;
+                overflow: scroll;
+            }
+
+            .stack_entry div {
+                min-width: 50px;
+                height: 50px;
+                border-style: solid;
+                border-color: black;
+                font-size: 20px;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <input type="text" id="formula_input" value="4 / ( ( 3 * ( 5.5 * 2 ) ) + ( ( 27 / 3 ) + ( 2 * -4 ) ) )" /><button id="load">Load Formula</button>
+        <div class="flex-box" id="formula">
+
+        </div>
+        <div class="flex-box" id="current_expr">
+            <div id="lhs"></div>
+            <div id="op"></div>
+            <div id="rhs"></div>
+        </div>
+        <h3>Memory:</h3>
+        <div class="col-flex-box" id="stack">
+        </div>
+    </body>
+    <script>
+        var currentIdx = 0;
+        var formula = "";
+        var formula_split = [];
+
+        var stack = [];
+        var current_expr = [];
+
+        $("#load").click(function() {
+            $("#formula").empty();
+            $("#stack").empty();
+            $("#lhs").empty();
+            $("#op").empty();
+            $("#rhs").empty();
+            currentIdx = 0;
+            stack = [];
+            current_expr = [];
+
+            formula = $("#formula_input").val();
+            formula_split = formula.split(" ");
+            for (var i = 0; i < formula_split.length; i++) {
+                var token = formula_split[i]
+                $("#formula").append(`<span class="token" id="token${i}">${token}</span>`);
+            }
+            $(".token").css("width", formula_split.length + "%");
+
+            $(`#token${currentIdx}`).addClass("selected");
+        });
+
+
+        $("body").keydown(function(e) {
+            if (e.which == 78 || e.which == 39) {
+                if (currentIdx >= formula_split.length) {
+                    var postfix = `${current_expr[0]} ${current_expr[2]} ${current_expr[1]}`
+                    alert(`Final Result: ${postfix}`);
+                }
+                
+                var token = formula_split[currentIdx];
+                if (token == "(") {
+                    alert("New subexpression found.\nSave the current state.\nReset.");
+                    var stack_entry = 
+                    `
+                        <div class="flex-box stack_entry" id="entry${stack.length}">
+                            <div>${current_expr.length >= 1 ? current_expr[0] : ""}</div>
+                            <div>${current_expr.length >= 2 ? current_expr[1] : ""}</div>
+                            <div>${current_expr.length >= 3 ? current_expr[2] : ""}</div>
+                        </div>
+                    `;
+
+                    stack.push(current_expr);
+                    current_expr = [];
+                    $("#current_expr").fadeOut(333, () => {
+                        $("#lhs").text("");
+                        $("#op").text("");
+                        $("#rhs").text("");
+                        $("#stack").prepend(stack_entry);
+                        $(`#entry${stack.length-1}`).hide().fadeIn(333, () => {
+                            $("#current_expr").fadeIn(333);
+                        });
+                    });
+
+
+                } else if (token == ")") {
+
+                    var postfix = `${current_expr[0]} ${current_expr[2]} ${current_expr[1]}`
+                    current_expr = stack.pop();
+                    current_expr.push(postfix);
+
+                    alert(`Subexpression finished.\nPostfix form: ${postfix}.\nRestore previous state and insert subexpression`)
+
+                    $("#current_expr").fadeOut(500, () => {
+                        $("#lhs").text(current_expr.length >= 1 ? current_expr[0] : "");
+                        $("#op").text(current_expr.length >= 2 ? current_expr[1] : "");
+                        $("#rhs").text(current_expr.length >= 3 ? current_expr[2] : "");
+                        $(`#entry${stack.length}`).fadeOut(500, function() {
+                            $("#current_expr").fadeIn(500);
+
+                            $(this).remove();
+                        });
+                    });
+
+                } else {
+                    current_expr.push(token);
+                    if (current_expr.length == 1) {
+                        $("#lhs").text(current_expr[0]);
+                    } else if (current_expr.length == 2) {
+                        $("#op").text(current_expr[1]);
+                    } else {
+                        $("#rhs").text(current_expr[2]);
+                    }
+                }
+                $(`#token${currentIdx}`).removeClass("selected");
+                currentIdx++;
+                $(`#token${currentIdx}`).addClass("selected");
+
+            }
+        });
+
+
+    </script>
+</html>
