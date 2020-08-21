@@ -102,7 +102,7 @@
 
 
         $("body").keydown(function(e) {
-            if (e.which == 78 || e.which == 39) {
+            if (!$("#formula_input").is(":focus") && (e.which == 78 || e.which == 39)) {
                 if (currentIdx >= formula_split.length) {
                     var postfix = `${current_expr[0]} ${current_expr[2]} ${current_expr[1]}`
                     alert(`Final Result: ${postfix}`);
